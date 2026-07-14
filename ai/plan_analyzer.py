@@ -1,19 +1,16 @@
 import os
 import json
-import google.generativeai as genai
+from groq import Groq
 from pydantic import BaseModel
 from typing import Literal
 
-# --- Pydantic structured output ---
 class AiDecision(BaseModel):
     decision: Literal["PROCEED", "HOLD", "BLOCK"]
     risk_level: Literal["LOW", "MEDIUM", "HIGH"]
     summary: str
     reasons: list[str]
 
-# --- Configure Gemini ---
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-2.0-flash")
+client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 def analyze_plan(scenario_name: str, plan_text: str) -> AiDecision:
     prompt = f"""You are a cloud infrastructure AI reviewer for DriftLens.
@@ -33,9 +30,12 @@ Return ONLY valid JSON with these fields:
 Example:
 {{"decision": "PROCEED", "risk_level": "LOW", "summary": "Safe to deploy.", "reasons": ["No destructive changes", "Resources properly tagged"]}}
 """
-    response = model.generate_content(prompt)
-    text = response.text.strip()
-    # Clean markdown fences if present
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+    )
+    text = response.choices[0].message.content.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1]
     if text.endswith("```"):
@@ -44,7 +44,6 @@ Example:
     data = json.loads(text)
     return AiDecision(**data)
 
-# --- Scenario 1: Safe deployment (add resources) ---
 scenario1 = """
 Plan: 5 to add, 0 to change, 0 to destroy.
 
@@ -55,7 +54,6 @@ Plan: 5 to add, 0 to change, 0 to destroy.
   + aws_cloudfront_distribution.site (enabled = true)
 """
 
-# --- Scenario 2: Risky change (destroy + recreate) ---
 scenario2 = """
 Plan: 1 to add, 0 to change, 3 to destroy.
 
