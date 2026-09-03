@@ -59,3 +59,37 @@ resource "azurerm_storage_blob" "index" {
 output "storage_website_url" {
   value = azurerm_storage_account.site.primary_web_endpoint
 }
+# ============================================
+# WORKLOAD B - Serverless Function (Azure Function)
+# ============================================
+
+# --- Resource 4: Service Plan (Consumption/Free) ---
+resource "azurerm_service_plan" "functions" {
+  name                = "psiddhi-jashwanth-func-plan"
+  resource_group_name = local.resource_group
+  location            = local.location
+  os_type             = "Linux"
+  sku_name            = "Y1"
+  tags                = local.tags
+}
+
+# --- Resource 5: Linux Function App ---
+resource "azurerm_linux_function_app" "hello" {
+  name                       = "psiddhijashwanthfunc"
+  resource_group_name        = local.resource_group
+  location                   = local.location
+  service_plan_id            = azurerm_service_plan.functions.id
+  storage_account_name       = azurerm_storage_account.site.name
+  storage_account_access_key = azurerm_storage_account.site.primary_access_key
+  tags                       = local.tags
+
+  site_config {
+    application_stack {
+      python_version = "3.12"
+    }
+  }
+}
+
+output "function_app_url" {
+  value = "https://${azurerm_linux_function_app.hello.default_hostname}/api/hello"
+}

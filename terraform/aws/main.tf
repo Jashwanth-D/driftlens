@@ -109,3 +109,56 @@ output "s3_website_url" {
 output "cloudfront_url" {
   value = aws_cloudfront_distribution.site.domain_name
 }
+# ============================================
+# WORKLOAD B - Serverless Function (AWS Lambda)
+# ============================================
+
+# --- Resource 6: IAM Role for Lambda ---
+resource "aws_iam_role" "lambda_role" {
+  name = "${local.prefix}-lambda-role"
+  tags = local.tags
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+    }]
+  })
+}
+
+# --- Resource 7: IAM Policy Attachment for CloudWatch Logs ---
+resource "aws_iam_role_policy_attachment" "lambda_logs" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# --- Resource 8: Lambda Function ---
+resource "aws_lambda_function" "hello" {
+  filename         = "${path.module}/lambda/handler.zip"
+  function_name    = "${local.prefix}-hello"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "handler.lambda_handler"
+  runtime          = "python3.12"
+  source_code_hash = filebase64sha256("${path.module}/lambda/handler.zip")
+}
+
+# --- Resource 9: Lambda Function URL (public endpoint, no auth) ---
+resource "aws_lambda_function_url" "hello" {
+  function_name      = aws_lambda_function.hello.function_name
+  authorization_type = "NONE"
+}
+
+output "lambda_url" {
+  value = aws_lambda_function_url.hello.function_url
+}
+
+# --- Resource 10: Lambda permission for public Function URL ---
+resource "aws_lambda_permission" "hello_url" {
+  statement_id           = "AllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.hello.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
