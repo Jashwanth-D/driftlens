@@ -31,7 +31,7 @@ Example:
 {{"decision": "PROCEED", "risk_level": "LOW", "summary": "Safe to deploy.", "reasons": ["No destructive changes", "Resources properly tagged"]}}
 """
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="qwen/qwen3.8-27b",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
     )
@@ -63,12 +63,41 @@ Plan: 1 to add, 0 to change, 3 to destroy.
   + aws_s3_bucket.site (new bucket name, no tags, no versioning)
 """
 
+
+scenario3 = """
+Plan: 2 to add, 0 to change, 2 to destroy.
+
+  - azurerm_storage_blob.index (DESTROY - moving content to AWS)
+  - azurerm_storage_account.site (DESTROY - decommissioning Azure static site)
+  + aws_s3_bucket.migrated_site (bucket = "psiddhi-jashwanth-migrated", tags = {project = "pSiddhi-2026-01"})
+  + aws_s3_bucket_website_configuration.migrated_site (index_document = "index.html")
+
+Context: Cross-cloud migration - moving static website from Azure Storage to AWS S3.
+Tradeoffs: Azure CDN latency in India (~15ms) vs CloudFront global (~50ms from India).
+Cost: Azure Storage ~$0.02/GB vs S3 ~$0.023/GB. Negligible at demo scale.
+"""
+
+scenario4 = """
+Plan: 0 to add, 1 to change, 0 to destroy.
+
+  ~ aws_cloudfront_distribution.site
+    - default_root_object = "index.html" -> null (REMOVING default root)
+    ~ origin.custom_origin_config.origin_protocol_policy: "http-only" -> "https-only"
+    ~ viewer_certificate.minimum_protocol_version: "TLSv1.2" -> "TLSv1" (DOWNGRADE)
+    ~ default_cache_behavior.min_ttl: 0 -> 86400 (forcing 24h cache)
+
+Context: In-place CDN configuration change with downtime risk.
+Risk: Removing default_root_object breaks all bare-domain requests (404).
+Risk: TLS downgrade from 1.2 to 1.0 introduces known vulnerabilities.
+Risk: 24h forced cache means fixes take a full day to propagate.
+"""
+
 if __name__ == "__main__":
     print("=" * 60)
     print("DriftLens AI Plan Analyzer")
     print("=" * 60)
 
-    for name, plan in [("Safe Deployment", scenario1), ("Risky Destroy+Recreate", scenario2)]:
+    for name, plan in [("Safe Deployment", scenario1), ("Risky Destroy+Recreate", scenario2), ("Cross-Cloud Migration", scenario3), ("CDN Config Change with Downtime Risk", scenario4)]:
         print(f"\n--- Scenario: {name} ---")
         try:
             result = analyze_plan(name, plan)
