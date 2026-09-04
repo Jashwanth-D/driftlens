@@ -11,7 +11,7 @@ class DriftReport(BaseModel):
     diffs: list[str]
     narrative: str
 
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
+client = Groq(api_key=os.environ["GROQ_API_KEY"]) if os.environ.get("GROQ_API_KEY") else None
 
 def run_cmd(cmd):
     result = subprocess.run(cmd, capture_output=True, text=True, shell=True)

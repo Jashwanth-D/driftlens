@@ -10,7 +10,7 @@ class AiDecision(BaseModel):
     summary: str
     reasons: list[str]
 
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
+client = Groq(api_key=os.environ["GROQ_API_KEY"]) if os.environ.get("GROQ_API_KEY") else None
 
 def analyze_plan(scenario_name: str, plan_text: str) -> AiDecision:
     prompt = f"""You are a cloud infrastructure AI reviewer for DriftLens.

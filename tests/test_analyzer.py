@@ -76,3 +76,53 @@ def test_analyze_plan_block_mocked():
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v"])
+
+# --- Additional tests for scenarios 3 and 4 (mocked) ---
+
+def test_analyze_plan_cross_cloud_mocked():
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = '''{"decision": "PROCEED", "risk_level": "LOW", "summary": "Safe migration.", "reasons": ["Intentional", "Cost neutral"]}'''
+    with patch("plan_analyzer.client") as mock_client:
+        mock_client.chat.completions.create.return_value = mock_response
+        result = analyze_plan("Cross-Cloud", "Plan: 2 to add, 0 to change, 2 to destroy")
+        assert result.decision == "PROCEED"
+        assert result.risk_level == "LOW"
+
+def test_analyze_plan_cdn_downtime_mocked():
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = '''{"decision": "BLOCK", "risk_level": "HIGH", "summary": "TLS downgrade.", "reasons": ["Security risk", "Cache issue", "404 risk"]}'''
+    with patch("plan_analyzer.client") as mock_client:
+        mock_client.chat.completions.create.return_value = mock_response
+        result = analyze_plan("CDN Change", "Plan: 0 to add, 1 to change, 0 to destroy")
+        assert result.decision == "BLOCK"
+        assert len(result.reasons) == 3
+
+def test_analyze_plan_strips_markdown_fences():
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = '''```json
+{"decision": "PROCEED", "risk_level": "LOW", "summary": "OK.", "reasons": []}
+```'''
+    with patch("plan_analyzer.client") as mock_client:
+        mock_client.chat.completions.create.return_value = mock_response
+        result = analyze_plan("Test", "Plan")
+        assert result.decision == "PROCEED"
+
+def test_analyze_plan_hold_scenario():
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = '''{"decision": "HOLD", "risk_level": "MEDIUM", "summary": "Needs review.", "reasons": ["Mixed"]}'''
+    with patch("plan_analyzer.client") as mock_client:
+        mock_client.chat.completions.create.return_value = mock_response
+        result = analyze_plan("Ambiguous", "Plan")
+        assert result.decision == "HOLD"
+        assert result.risk_level == "MEDIUM"
+
+def test_scenario_strings_defined():
+    import plan_analyzer
+    assert "5 to add" in plan_analyzer.scenario1
+    assert "3 to destroy" in plan_analyzer.scenario2
+    assert "Cross-cloud migration" in plan_analyzer.scenario3
+    assert "downtime" in plan_analyzer.scenario4.lower()
